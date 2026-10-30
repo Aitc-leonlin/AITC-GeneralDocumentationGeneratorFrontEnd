@@ -1,0 +1,90 @@
+{
+  "_comment": "目前未被其他功能使用到。此檔案預留給徵審報告欄位順序與 DB concept name mapping 使用。",
+  "mappings": [
+    {
+      "order": 1,
+      "reportFieldName": "年度",
+      "dbConceptName": "年度"
+    },
+    {
+      "order": 2,
+      "reportFieldName": "季度",
+      "dbConceptName": "季度"
+    },
+    {
+      "order": 3,
+      "reportFieldName": "保留盈餘",
+      "dbConceptName": "保留盈餘"
+    },
+    {
+      "order": 4,
+      "reportFieldName": "其他應收款",
+      "dbConceptName": "其他應收款"
+    },
+    {
+      "order": 5,
+      "reportFieldName": "其他流動資產",
+      "dbConceptName": "其他流動資產"
+    },
+    {
+      "order": 6,
+      "reportFieldName": "存貨",
+      "dbConceptName": "存貨"
+    },
+    {
+      "order": 7,
+      "reportFieldName": "應收帳款",
+      "dbConceptName": "應收帳款"
+    },
+    {
+      "order": 8,
+      "reportFieldName": "股東權益總額",
+      "dbConceptName": "股東權益總額"
+    },
+    {
+      "order": 9,
+      "reportFieldName": "流動負債",
+      "dbConceptName": "流動負債"
+    },
+    {
+      "order": 10,
+      "reportFieldName": "流動資產",
+      "dbConceptName": "流動資產"
+    },
+    {
+      "order": 11,
+      "reportFieldName": "現金",
+      "dbConceptName": "現金"
+    },
+    {
+      "order": 12,
+      "reportFieldName": "股本",
+      "dbConceptName": "股本"
+    },
+    {
+      "order": 13,
+      "reportFieldName": "負債及股東權益總額",
+      "dbConceptName": "負債及股東權益總額"
+    },
+    {
+      "order": 14,
+      "reportFieldName": "資本公積",
+      "dbConceptName": "資本公積"
+    },
+    {
+      "order": 15,
+      "reportFieldName": "資產總額",
+      "dbConceptName": "資產總額"
+    },
+    {
+      "order": 16,
+      "reportFieldName": "非流動負債",
+      "dbConceptName": "非流動負債"
+    },
+    {
+      "order": 17,
+      "reportFieldName": "非流動資產",
+      "dbConceptName": "非流動資產"
+    }
+  ]
+}

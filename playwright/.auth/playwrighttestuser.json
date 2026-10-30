@@ -1,0 +1,22 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:3000",
+      "localStorage": [
+        {
+          "name": "membership.user",
+          "value": "{\"id\":\"48cb3bb4-0e00-429f-a8bd-e21374d77b3c\",\"username\":\"playwrighttestuser\",\"email\":\"playwrighttestuser@example.local\",\"displayName\":\"Playwright Test User\",\"status\":\"ACTIVE\",\"emailVerifiedAt\":null,\"mustChangePassword\":false}"
+        },
+        {
+          "name": "membership.accessToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhaXRjLW1lbWJlcnNoaXAiLCJzdWIiOiI0OGNiM2JiNC0wZTAwLTQyOWYtYThiZC1lMjEzNzRkNzdiM2MiLCJ1c2VybmFtZSI6InBsYXl3cmlnaHR0ZXN0dXNlciIsInNpZCI6IjFiZmM0ZmI0LTU5ODYtNGE2Zi1iMzEyLTJiM2UzMjc4MzU5NyIsImlhdCI6MTc4NzkwNTM4MSwiZXhwIjoxNzg3OTkxNzgxfQ.vE9d0ui0ElWMIIh6Q09TKfEk_auC3IGmgEmDwoFC5m4"
+        },
+        {
+          "name": "membership.refreshToken",
+          "value": "exAncvjOYQRrCt0qzJx97Dn4vg_2oDH7SNj8mSK8v1EZFItuJNtLxzHc8g48Qgi_"
+        }
+      ]
+    }
+  ]
+}

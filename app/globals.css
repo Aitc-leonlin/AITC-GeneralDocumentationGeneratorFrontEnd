@@ -1,0 +1,382 @@
+@import "react-day-picker/dist/style.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 47.4% 11.2%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 210 40% 98%;
+    --ring: 215 20.2% 65.1%;
+    --radius: 0.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 224 71% 4%;
+      --foreground: 213 31% 91%;
+      --muted: 223 47% 11%;
+      --muted-foreground: 215.4 16.3% 56.9%;
+      --accent: 216 34% 17%;
+      --accent-foreground: 210 40% 98%;
+      --popover: 224 71% 4%;
+      --popover-foreground: 215 20.2% 65.1%;
+      --border: 216 34% 17%;
+      --input: 216 34% 17%;
+      --card: 224 71% 4%;
+      --card-foreground: 213 31% 91%;
+      --primary: 210 40% 98%;
+      --primary-foreground: 222.2 47.4% 1.2%;
+      --secondary: 222.2 47.4% 11.2%;
+      --secondary-foreground: 210 40% 98%;
+      --destructive: 0 63% 31%;
+      --destructive-foreground: 210 40% 98%;
+      --ring: 216 34% 17%;
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  p {
+    margin: 8px 0;
+  }
+
+  code {
+    @apply dark:text-orange-400 text-orange-700;
+  }
+
+  li {
+    padding: 4px;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .loading-dot {
+    @apply h-2.5 w-2.5 rounded-full bg-current opacity-40;
+    animation: loading-bounce 1.2s infinite ease-in-out;
+  }
+
+  .running-generate-indicator {
+    @apply inline-flex h-8 w-10 items-center justify-center;
+  }
+
+  .running-person {
+    @apply relative block h-7 w-8 text-slate-950;
+    animation: running-person-bob 0.42s ease-in-out infinite;
+  }
+
+  .running-person__head,
+  .running-person__body,
+  .running-person__arm,
+  .running-person__leg {
+    @apply absolute block bg-current;
+  }
+
+  .running-person__head {
+    @apply h-2.5 w-2.5 rounded-full;
+    left: 13px;
+    top: 0;
+  }
+
+  .running-person__body {
+    @apply h-3.5 w-1 rounded-full;
+    left: 16px;
+    top: 9px;
+    transform: rotate(12deg);
+    transform-origin: 50% 0;
+  }
+
+  .running-person__arm,
+  .running-person__leg {
+    @apply h-1 w-3.5 rounded-full;
+    transform-origin: 2px 50%;
+  }
+
+  .running-person__arm {
+    left: 15px;
+    top: 12px;
+  }
+
+  .running-person__arm--front {
+    animation: running-person-arm-front 0.42s ease-in-out infinite;
+  }
+
+  .running-person__arm--back {
+    animation: running-person-arm-back 0.42s ease-in-out infinite;
+  }
+
+  .running-person__leg {
+    left: 15px;
+    top: 21px;
+  }
+
+  .running-person__leg--front {
+    animation: running-person-leg-front 0.42s ease-in-out infinite;
+  }
+
+  .running-person__leg--back {
+    animation: running-person-leg-back 0.42s ease-in-out infinite;
+  }
+}
+
+@layer components {
+  .membership-user-form input:not([type="checkbox"]) {
+    background-color: #ffffff;
+  }
+
+  .membership-user-form input:not([type="checkbox"]):-webkit-autofill,
+  .membership-user-form input:not([type="checkbox"]):-webkit-autofill:hover,
+  .membership-user-form input:not([type="checkbox"]):-webkit-autofill:focus {
+    -webkit-text-fill-color: #0f172a !important;
+    box-shadow: 0 0 0 1000px #ffffff inset !important;
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+    caret-color: #0f172a;
+  }
+
+  .membership-user-form input:not([type="checkbox"]):autofill {
+    background-color: #ffffff !important;
+    box-shadow: 0 0 0 1000px #ffffff inset !important;
+  }
+}
+
+@keyframes loading-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes running-person-bob {
+  0% {
+    transform: translateY(0) translateX(0);
+  }
+
+  50% {
+    transform: translateY(-2px) translateX(2px);
+  }
+
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+}
+
+@keyframes running-person-leg-front {
+  0% {
+    transform: rotate(34deg);
+  }
+
+  50% {
+    transform: rotate(142deg);
+  }
+
+  100% {
+    transform: rotate(34deg);
+  }
+}
+
+@keyframes running-person-leg-back {
+  0% {
+    transform: rotate(142deg);
+  }
+
+  50% {
+    transform: rotate(34deg);
+  }
+
+  100% {
+    transform: rotate(142deg);
+  }
+}
+
+@keyframes running-person-arm-front {
+  0% {
+    transform: rotate(150deg);
+  }
+
+  50% {
+    transform: rotate(20deg);
+  }
+
+  100% {
+    transform: rotate(150deg);
+  }
+}
+
+@keyframes running-person-arm-back {
+  0% {
+    transform: rotate(20deg);
+  }
+
+  50% {
+    transform: rotate(150deg);
+  }
+
+  100% {
+    transform: rotate(20deg);
+  }
+}
+
+
+/* Tremor Design */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --animate-hide: hide 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-down-and-fade: slideDownAndFade 150ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-left-and-fade: slideLeftAndFade 150ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-up-and-fade: slideUpAndFade 150ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-right-and-fade: slideRightAndFade 150ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-accordion-open: accordionOpen 150ms cubic-bezier(0.87, 0, 0.13, 1);
+  --animate-accordion-close: accordionClose 150ms cubic-bezier(0.87, 0, 0.13, 1);
+  --animate-dialog-overlay-show: dialogOverlayShow 150ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-dialog-content-show: dialogContentShow 150ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-drawer-slide-left-and-fade: drawerSlideLeftAndFade 150ms
+    cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-drawer-slide-right-and-fade: drawerSlideRightAndFade 150ms ease-in;
+
+  @keyframes hide {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes slideDownAndFade {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes slideLeftAndFade {
+    from {
+      opacity: 0;
+      transform: translateX(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes slideUpAndFade {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes slideRightAndFade {
+    from {
+      opacity: 0;
+      transform: translateX(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes accordionOpen {
+    from {
+      height: 0px;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordionClose {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0px;
+    }
+  }
+  @keyframes dialogOverlayShow {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes dialogContentShow {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -45%) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  @keyframes drawerSlideLeftAndFade {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes drawerSlideRightAndFade {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+  }
+}
