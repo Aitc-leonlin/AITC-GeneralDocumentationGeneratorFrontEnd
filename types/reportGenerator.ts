@@ -130,28 +130,6 @@ export type PendingClarification = {
   purposes: DocumentPurpose[];
 };
 
-export type ReportOutlinePayload = {
-  messages: ReportChatMessage[];
-  currentDocumentTypeId?: string | null;
-  currentGeneralPlan?: GeneralDocumentPlan | null;
-  currentGeneralOutline?: GeneralDocumentOutline | null;
-  currentPurposePlan?: PurposeDocumentPlan | null;
-  currentPurposeOutline?: PurposeDocumentOutline | null;
-  pendingClarification?: PendingClarification | null;
-  currentSourceMode?: "default_json" | "user_data" | null;
-};
-
-export type ReportOutlineResult = {
-  assistantMessage: string;
-  generalPlan: GeneralDocumentPlan | null;
-  generalOutline: GeneralDocumentOutline | null;
-  purposePlan: PurposeDocumentPlan | null;
-  purposeOutline: PurposeDocumentOutline | null;
-  pendingClarification: PendingClarification | null;
-  sourceMode?: "default_json" | "user_data" | null;
-  llmTraces: ReportLlmTrace[];
-};
-
 export type ReportConversationThread = {
   id: string;
   title: string;

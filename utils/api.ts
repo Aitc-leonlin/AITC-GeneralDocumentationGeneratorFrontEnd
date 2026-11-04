@@ -23,7 +23,6 @@ export const BACKEND_API_PATHS = {
   chatRetrieval: "/api/chat/retrieval",
   chatRetrievalAgents: "/api/chat/retrieval-agents",
   chatStructuredOutput: "/api/chat/structured-output",
-  reportGeneratorDraft: "/api/report-generator/draft",
   reportGeneratorThreads: "/api/report-generator/threads",
   reportGeneratorQuickStarts: "/api/report-generator/quick-starts",
   reportGeneratorHistory: "/api/report-generator/history",

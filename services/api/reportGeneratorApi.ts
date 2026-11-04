@@ -1,8 +1,6 @@
 import type {
   ReportDashboard,
   ReportDocumentResult,
-  ReportOutlinePayload,
-  ReportOutlineResult,
   ReportHistoryResult,
   ReportQuickStart,
   ReportConversationThread,
@@ -165,29 +163,74 @@ export async function generateReportThreadDocument(thread: ReportConversationThr
   );
 }
 
-export async function createReportOutline(payload: ReportOutlinePayload): Promise<ReportOutlineResult> {
-  const json = await readJsonResponse<ReportOutlineResult & ErrorPayload>(
-    await fetchBackendApi(BACKEND_API_PATHS.reportGeneratorDraft, {
+export async function generateReportThreadDocumentWithProgress(
+  thread: ReportConversationThread,
+  onProgress: (percent: number, label: string) => void,
+): Promise<ReportDocumentResult> {
+  const response = await fetchBackendApi(
+    `${BACKEND_API_PATHS.reportGeneratorThreads}/${encodeURIComponent(thread.id)}/generate/stream`,
+    {
       method: "POST",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-    "報告大綱整理失敗",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/x-ndjson",
+      },
+      body: JSON.stringify({ confirmed: true }),
+    },
   );
-  if (typeof json.assistantMessage !== "string") {
-    throw new Error("報告大綱回應格式不正確");
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as ErrorPayload | null;
+    throw new Error(getErrorMessage(payload, "報告產生請求失敗"));
   }
-  return {
-    assistantMessage: json.assistantMessage,
-    generalPlan: json.generalPlan ?? null,
-    generalOutline: json.generalOutline ?? null,
-    purposePlan: json.purposePlan ?? null,
-    purposeOutline: json.purposeOutline ?? null,
-    pendingClarification: json.pendingClarification ?? null,
-    sourceMode: json.sourceMode ?? null,
-    llmTraces: Array.isArray(json.llmTraces) ? json.llmTraces : [],
-  };
+  if (!response.body) throw new Error("瀏覽器無法讀取報告產生進度");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = "";
+  let result: ReportDocumentResult | null = null;
+
+  function handleLine(line: string) {
+    if (!line.trim()) return;
+    const event = JSON.parse(line) as Record<string, unknown>;
+    if (event.type === "progress" && typeof event.percent === "number" && typeof event.label === "string") {
+      onProgress(Math.max(0, Math.min(100, event.percent)), event.label);
+    } else if (event.type === "complete" && typeof event.contentBase64 === "string" && typeof event.filename === "string") {
+      const binary = window.atob(event.contentBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      result = {
+        blob: new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+        filename: event.filename,
+      };
+      onProgress(100, "報告產生完成");
+    } else if (event.type === "error") {
+      throw new Error(typeof event.message === "string" ? event.message : "報告產生失敗");
+    }
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      pending += decoder.decode(value, { stream: true });
+      let separator = pending.indexOf("\n");
+      while (separator !== -1) {
+        handleLine(pending.slice(0, separator));
+        pending = pending.slice(separator + 1);
+        separator = pending.indexOf("\n");
+      }
+    }
+    pending += decoder.decode();
+    if (pending.trim()) handleLine(pending);
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+  if (!result) throw new Error("報告產生中斷，沒有收到 DOCX 檔案");
+  return result;
 }
 
 export async function fetchReportThreads(): Promise<ReportConversationThread[]> {

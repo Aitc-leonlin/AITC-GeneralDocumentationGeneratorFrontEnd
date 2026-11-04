@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { MembershipRouteGuard } from "@/components/membership/authorization";
 import MembershipSessionGuard from "@/components/membership/MembershipSessionGuard";
 import { MODULE_PERMISSIONS } from "@/data/modulePermissions";
-import { deleteReportThread, fetchReportQuickStarts, fetchReportThreads, generateReportThreadDocument, sendReportThreadMessage } from "@/services/api/reportGeneratorApi";
+import { deleteReportThread, fetchReportQuickStarts, fetchReportThreads, generateReportThreadDocumentWithProgress, sendReportThreadMessage } from "@/services/api/reportGeneratorApi";
 import type { ReportConversationThread, ReportQuickStart } from "@/types/reportGenerator";
 import { deleteReportGraphTrace, readReportGraphTrace, saveReportGraphTrace, type LatestReportGraphTrace } from "@/lib/reportGraphTrace";
 
@@ -39,11 +39,11 @@ function ReportGeneratorContent() {
   const [compactToolbar, setCompactToolbar] = useState(true);
   const [input, setInput] = useState("");
   const [pendingMessage, setPendingMessage] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
   const [quickStarts, setQuickStarts] = useState<ReportQuickStart[]>([]);
   const [quickStartsLoading, setQuickStartsLoading] = useState(true);
   const [drafting, setDrafting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({ percent: 0, label: "" });
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [graphDialogOpen, setGraphDialogOpen] = useState(false);
@@ -54,6 +54,10 @@ function ReportGeneratorContent() {
   const outlineWidthRef = useRef(DEFAULT_OUTLINE_WIDTH);
   const resizingOutlineRef = useRef(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const downloadTargetRef = useRef(0);
+  const downloadDisplayedRef = useRef(0);
+  const downloadProgressTimerRef = useRef<number | null>(null);
+  const finishProgressRef = useRef<(() => void) | null>(null);
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const messages = activeThread?.messages ?? [];
   const generalOutline = activeThread?.generalOutline ?? null;
@@ -70,6 +74,13 @@ function ReportGeneratorContent() {
 
   useEffect(() => {
     setGraphTrace(readReportGraphTrace());
+  }, []);
+
+  useEffect(() => () => {
+    if (downloadProgressTimerRef.current !== null) {
+      window.clearInterval(downloadProgressTimerRef.current);
+    }
+    finishProgressRef.current?.();
   }, []);
 
   useEffect(() => {
@@ -184,7 +195,6 @@ function ReportGeneratorContent() {
     if (!content || !activeThreadId || threadsLoading || drafting || downloading) return;
     setDrafting(true);
     setPendingMessage(content);
-    setConfirmed(false);
     setError("");
     setStatus("");
     try {
@@ -216,12 +226,42 @@ function ReportGeneratorContent() {
   }
 
   async function downloadReport() {
-    if (!activeThread || !canDownload || !confirmed || drafting || downloading) return;
+    if (!activeThread || !canDownload || drafting || downloading) return;
     setDownloading(true);
+    downloadTargetRef.current = 0;
+    downloadDisplayedRef.current = 0;
+    setDownloadProgress({ percent: 0, label: "開始產生報告" });
+    if (downloadProgressTimerRef.current !== null) {
+      window.clearInterval(downloadProgressTimerRef.current);
+    }
+    downloadProgressTimerRef.current = window.setInterval(() => {
+      const remaining = downloadTargetRef.current - downloadDisplayedRef.current;
+      if (remaining <= 0) return;
+      const next = Math.min(
+        downloadTargetRef.current,
+        downloadDisplayedRef.current + Math.max(1, Math.ceil(remaining / 30)),
+      );
+      downloadDisplayedRef.current = next;
+      setDownloadProgress((current) => ({ ...current, percent: next }));
+      if (next === 100) {
+        finishProgressRef.current?.();
+        finishProgressRef.current = null;
+      }
+    }, 80);
     setError("");
     setStatus("");
     try {
-      const result = await generateReportThreadDocument(activeThread);
+      const result = await generateReportThreadDocumentWithProgress(
+        activeThread,
+        (percent, label) => {
+          downloadTargetRef.current = Math.max(
+            downloadTargetRef.current,
+            Math.max(0, Math.min(100, Math.round(percent))),
+          );
+          setDownloadProgress((current) => ({ ...current, label }));
+        },
+      );
+      downloadTargetRef.current = 100;
       const url = URL.createObjectURL(result.blob);
       const link = document.createElement("a");
       link.href = url;
@@ -230,10 +270,18 @@ function ReportGeneratorContent() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      if (downloadDisplayedRef.current < 100) {
+        await new Promise<void>((resolve) => { finishProgressRef.current = resolve; });
+      }
       setStatus("已下載 " + result.filename);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "DOCX 產生失敗");
     } finally {
+      if (downloadProgressTimerRef.current !== null) {
+        window.clearInterval(downloadProgressTimerRef.current);
+        downloadProgressTimerRef.current = null;
+      }
+      finishProgressRef.current = null;
       setDownloading(false);
     }
   }
@@ -243,7 +291,6 @@ function ReportGeneratorContent() {
     setMobilePanel(null);
     setActiveThreadId(crypto.randomUUID());
     setInput("");
-    setConfirmed(false);
     setError("");
     setStatus("");
   }
@@ -253,7 +300,6 @@ function ReportGeneratorContent() {
     setMobilePanel(null);
     setActiveThreadId(threadId);
     setInput("");
-    setConfirmed(false);
     setError("");
     setStatus("");
   }
@@ -269,7 +315,6 @@ function ReportGeneratorContent() {
       if (threadId === activeThreadId) {
         setActiveThreadId(remaining[0]?.id ?? crypto.randomUUID());
         setInput("");
-        setConfirmed(false);
         setStatus("");
       }
     } catch (cause) {
@@ -480,11 +525,26 @@ function ReportGeneratorContent() {
             </section>
         </div>
         <footer className="shrink-0 space-y-3 border-t border-border bg-background p-4">
-          <label className="flex items-start gap-2 rounded-lg border border-border bg-secondary p-3 text-sm">
-            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={!canDownload || drafting || downloading} className="mt-1 accent-primary" />
-            <span>我已確認將依目前資訊產生 DOCX；有合適案例時才會引用測試 JSON。</span>
-          </label>
-          <Button type="button" onClick={() => void downloadReport()} disabled={!canDownload || !confirmed || drafting || downloading} className="h-auto w-full py-3">
+          {downloading ? (
+            <div className="space-y-2 rounded-lg border border-border bg-secondary p-3" role="status" aria-live="polite">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate text-muted-foreground">{downloadProgress.label}</span>
+                <span className="shrink-0 font-semibold tabular-nums">{downloadProgress.percent}%</span>
+              </div>
+              <div
+                role="progressbar"
+                aria-label="報告產生進度"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={downloadProgress.percent}
+                aria-valuetext={downloadProgress.label}
+                className="h-2 overflow-hidden rounded-full bg-border"
+              >
+                <div className="h-full rounded-full bg-primary transition-[width] duration-75" style={{ width: `${downloadProgress.percent}%` }} />
+              </div>
+            </div>
+          ) : null}
+          <Button type="button" onClick={() => void downloadReport()} disabled={!canDownload || drafting || downloading} className="h-auto w-full py-3">
             {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}{downloading ? "DOCX 產生中…" : "下載目前版本 DOCX"}
           </Button>
         </footer>
