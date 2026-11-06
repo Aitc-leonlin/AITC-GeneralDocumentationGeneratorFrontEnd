@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronLeft, ChevronRight, Download, FileText, GitBranch, History, Loader2, MessageSquarePlus, PanelRight, Send, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Eye, FileText, GitBranch, History, Loader2, MessageSquarePlus, PanelRight, Send, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MembershipRouteGuard } from "@/components/membership/authorization";
@@ -14,41 +14,14 @@ import type { ReportConversationThread, ReportQuickStart } from "@/types/reportG
 import { deleteReportGraphTrace, readReportGraphTrace, saveReportGraphTrace, type LatestReportGraphTrace } from "@/lib/reportGraphTrace";
 
 const OUTLINE_WIDTH_STORAGE_KEY = "aitc-report-generator-outline-width-v1";
-const OUTLINE_COMPARISON_STORAGE_KEY = "aitc-report-generator-outline-comparison-v1";
 const DEFAULT_OUTLINE_WIDTH = 340;
 const MIN_OUTLINE_WIDTH = 260;
 const MAX_OUTLINE_WIDTH = 800;
 const MIN_CHAT_WIDTH = 360;
 const HISTORY_PANEL_WIDTH = 290;
 const ACTIVE_PANEL_BUTTON_CLASS = "border-slate-300 bg-slate-100 text-slate-500 hover:bg-slate-100 hover:text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
-const ACTIVE_OUTLINE_MODE_CLASS = "border-[#15803D] bg-[#15803D] text-white hover:border-[#166534] hover:bg-[#166534] hover:text-white focus-visible:ring-2 focus-visible:ring-[#15803D] dark:border-green-500 dark:bg-green-700 dark:text-white dark:hover:bg-green-600";
-const INACTIVE_OUTLINE_MODE_CLASS = "border-[#86EFAC] bg-[#F0FDF4] text-[#15803D] hover:border-[#4ADE80] hover:bg-[#DCFCE7] hover:text-[#166534] focus-visible:ring-2 focus-visible:ring-[#15803D] dark:border-green-700 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900";
-
-type OutlineSnapshot = Pick<ReportConversationThread, "generalOutline" | "purposeOutline">;
-type OutlineComparison = { previous: OutlineSnapshot; currentFingerprint: string; responseIndex: number };
-
-function outlineSnapshot(thread: ReportConversationThread | null | undefined): OutlineSnapshot {
-  return { generalOutline: thread?.generalOutline ?? null, purposeOutline: thread?.purposeOutline ?? null };
-}
-
-function loadOutlineComparisons(): Record<string, OutlineComparison> {
-  if (typeof window === "undefined") return {};
-  try {
-    const saved = window.sessionStorage.getItem(OUTLINE_COMPARISON_STORAGE_KEY);
-    const parsed: unknown = saved ? JSON.parse(saved) : {};
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed).filter(([, value]) => {
-        if (!value || typeof value !== "object") return false;
-        const entry = value as Partial<OutlineComparison>;
-        return Boolean(entry.previous && typeof entry.previous === "object") &&
-          typeof entry.currentFingerprint === "string" && typeof entry.responseIndex === "number";
-      }),
-    ) as Record<string, OutlineComparison>;
-  } catch {
-    return {};
-  }
-}
+const ACTIVE_OUTLINE_MODE_CLASS = "border-[#15803D] bg-[#15803D] text-white shadow-md ring-2 ring-[#BBF7D0] hover:border-[#166534] hover:bg-[#166534] hover:text-white dark:border-green-500 dark:bg-green-700 dark:text-white dark:ring-green-900 dark:hover:bg-green-600";
+const INACTIVE_OUTLINE_MODE_CLASS = "border-[#86EFAC] bg-white text-[#15803D] shadow-sm hover:border-[#15803D] hover:bg-[#F0FDF4] hover:text-[#166534] hover:shadow-md dark:border-green-700 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900";
 
 export default function ReportGeneratorPage() {
   return (
@@ -81,7 +54,6 @@ function ReportGeneratorContent() {
   const [status, setStatus] = useState("");
   const [graphDialogOpen, setGraphDialogOpen] = useState(false);
   const [graphTrace, setGraphTrace] = useState<LatestReportGraphTrace | null>(null);
-  const [outlineComparisons, setOutlineComparisons] = useState<Record<string, OutlineComparison>>(loadOutlineComparisons);
   const pageRef = useRef<HTMLElement>(null);
   const centerPaneRef = useRef<HTMLDivElement>(null);
   const outlineAsideRef = useRef<HTMLElement>(null);
@@ -96,15 +68,10 @@ function ReportGeneratorContent() {
   const generalOutline = activeThread?.generalOutline ?? null;
   const purposeOutline = activeThread?.purposeOutline ?? null;
   const generalSourceMode = activeThread?.sourceMode ?? null;
-  const currentOutlineSnapshot = outlineSnapshot(activeThread);
-  const outlineComparison = outlineComparisons[activeThreadId];
-  const compareOutline = Boolean(
-    outlineComparison &&
-    outlineComparison.responseIndex === messages.length - 1 &&
-    outlineComparison.currentFingerprint === JSON.stringify(currentOutlineSnapshot),
-  );
-  const previousPurposeOutline = compareOutline ? outlineComparison.previous.purposeOutline : null;
-  const previousGeneralOutline = compareOutline ? outlineComparison.previous.generalOutline : null;
+  const outlineRevision = activeThread?.outlineRevision ?? null;
+  const compareOutline = Boolean(outlineRevision && (purposeOutline || generalOutline));
+  const previousPurposeOutline = outlineRevision?.previousPurposeOutline ?? null;
+  const previousGeneralOutline = outlineRevision?.previousGeneralOutline ?? null;
   const canDownload = messages.some((message) => message.role === "user");
   const latestResponse = messages.at(-1);
   const savedGraphTrace = graphTrace?.threadId === activeThreadId ? graphTrace : null;
@@ -117,14 +84,6 @@ function ReportGeneratorContent() {
   useEffect(() => {
     setGraphTrace(readReportGraphTrace());
   }, []);
-
-  useEffect(() => {
-    try {
-      window.sessionStorage.setItem(OUTLINE_COMPARISON_STORAGE_KEY, JSON.stringify(outlineComparisons));
-    } catch {
-      // The latest comparison remains available until this page is closed.
-    }
-  }, [outlineComparisons]);
 
   useEffect(() => () => {
     if (downloadProgressTimerRef.current !== null) {
@@ -254,24 +213,9 @@ function ReportGeneratorContent() {
     setPendingMessage(content);
     setError("");
     setStatus("");
-    const previousSnapshot = outlineSnapshot(activeThread);
     try {
       const saved = await sendReportThreadMessage(activeThreadId, content);
       const { graphNodes, ...thread } = saved;
-      const currentSnapshot = outlineSnapshot(thread);
-      setOutlineComparisons((current) => {
-        const next = { ...current };
-        if (JSON.stringify(previousSnapshot) === JSON.stringify(currentSnapshot)) {
-          delete next[thread.id];
-        } else {
-          next[thread.id] = {
-            previous: previousSnapshot,
-            currentFingerprint: JSON.stringify(currentSnapshot),
-            responseIndex: thread.messages.length - 1,
-          };
-        }
-        return next;
-      });
       setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]);
       const latestMessage = thread.messages.at(-1);
       if (latestMessage?.role === "assistant") {
@@ -381,11 +325,6 @@ function ReportGeneratorContent() {
       await deleteReportThread(threadId);
       const remaining = threads.filter((thread) => thread.id !== threadId);
       setThreads(remaining);
-      setOutlineComparisons((current) => {
-        const next = { ...current };
-        delete next[threadId];
-        return next;
-      });
       deleteReportGraphTrace(threadId);
       setGraphTrace((current) => current?.threadId === threadId ? null : current);
       if (threadId === activeThreadId) {
@@ -540,7 +479,7 @@ function ReportGeneratorContent() {
             <section className="rounded-lg border border-border bg-background p-4">
               <div className="flex items-center gap-2"><Sparkles className="h-5 w-5" /><h2 className="font-semibold">大綱預覽</h2>{pendingMessage ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" /> : null}</div>
               <p className="mt-1 text-xs text-muted-foreground">先確認文件用途，再整理成一份可修改的大綱。</p>
-              <div role="group" aria-label="大綱預覽顯示方式" className="mt-3 flex flex-wrap gap-1.5">
+              <div role="group" aria-label="大綱預覽顯示方式" className="mt-2 grid w-full min-w-0 grid-cols-3 gap-1.5">
                 {([
                   ["latest", "一般檢視"],
                   ["changes", "檢視最新改動"],
@@ -552,8 +491,8 @@ function ReportGeneratorContent() {
                   variant="outline"
                   aria-pressed={outlineViewMode === mode}
                   onClick={() => setOutlineViewMode(mode)}
-                  className={`h-auto min-h-8 whitespace-normal text-xs ${outlineViewMode === mode ? ACTIVE_OUTLINE_MODE_CLASS : INACTIVE_OUTLINE_MODE_CLASS}`}
-                >{label}</Button>)}
+                  className={`h-auto min-h-10 w-full min-w-0 gap-1 whitespace-normal rounded-lg border-2 px-1.5 py-1.5 text-center text-xs font-semibold leading-tight transition-all hover:-translate-y-0.5 active:translate-y-0 focus-visible:ring-2 focus-visible:ring-[#15803D] [&_svg]:size-3.5 ${outlineViewMode === mode ? ACTIVE_OUTLINE_MODE_CLASS : INACTIVE_OUTLINE_MODE_CLASS}`}
+                >{mode === "latest" ? <Eye aria-hidden="true" /> : mode === "changes" ? <Sparkles aria-hidden="true" /> : <History aria-hidden="true" />}{label}</Button>)}
               </div>
               {compareOutline && outlineViewMode !== "latest" ? <div className="mt-2 flex flex-wrap gap-1.5 text-xs" aria-label="大綱變更顏色說明">
                 <span className="rounded px-1.5 py-0.5" style={OUTLINE_CHANGE_COLORS.added}>新增</span>

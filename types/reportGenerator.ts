@@ -130,6 +130,11 @@ export type PendingClarification = {
   purposes: DocumentPurpose[];
 };
 
+export type ReportOutlineRevision = {
+  previousGeneralOutline: GeneralDocumentOutline | null;
+  previousPurposeOutline: PurposeDocumentOutline | null;
+};
+
 export type ReportConversationThread = {
   id: string;
   title: string;
@@ -141,6 +146,7 @@ export type ReportConversationThread = {
   generalOutline: GeneralDocumentOutline | null;
   purposePlan: PurposeDocumentPlan | null;
   purposeOutline: PurposeDocumentOutline | null;
+  outlineRevision: ReportOutlineRevision | null;
   pendingClarification: PendingClarification | null;
   sourceMode?: "default_json" | "user_data" | null;
   llmTraces: ReportLlmTrace[];
