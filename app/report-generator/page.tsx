@@ -6,18 +6,49 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MembershipRouteGuard } from "@/components/membership/authorization";
 import MembershipSessionGuard from "@/components/membership/MembershipSessionGuard";
+import { OUTLINE_CHANGE_COLORS, type OutlineViewMode } from "@/components/report-generator/OutlineChangeText";
+import { OutlinePreview } from "@/components/report-generator/OutlinePreview";
 import { MODULE_PERMISSIONS } from "@/data/modulePermissions";
 import { deleteReportThread, fetchReportQuickStarts, fetchReportThreads, generateReportThreadDocumentWithProgress, sendReportThreadMessage } from "@/services/api/reportGeneratorApi";
 import type { ReportConversationThread, ReportQuickStart } from "@/types/reportGenerator";
 import { deleteReportGraphTrace, readReportGraphTrace, saveReportGraphTrace, type LatestReportGraphTrace } from "@/lib/reportGraphTrace";
 
 const OUTLINE_WIDTH_STORAGE_KEY = "aitc-report-generator-outline-width-v1";
+const OUTLINE_COMPARISON_STORAGE_KEY = "aitc-report-generator-outline-comparison-v1";
 const DEFAULT_OUTLINE_WIDTH = 340;
 const MIN_OUTLINE_WIDTH = 260;
 const MAX_OUTLINE_WIDTH = 800;
 const MIN_CHAT_WIDTH = 360;
 const HISTORY_PANEL_WIDTH = 290;
 const ACTIVE_PANEL_BUTTON_CLASS = "border-slate-300 bg-slate-100 text-slate-500 hover:bg-slate-100 hover:text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
+const ACTIVE_OUTLINE_MODE_CLASS = "border-[#15803D] bg-[#15803D] text-white hover:border-[#166534] hover:bg-[#166534] hover:text-white focus-visible:ring-2 focus-visible:ring-[#15803D] dark:border-green-500 dark:bg-green-700 dark:text-white dark:hover:bg-green-600";
+const INACTIVE_OUTLINE_MODE_CLASS = "border-[#86EFAC] bg-[#F0FDF4] text-[#15803D] hover:border-[#4ADE80] hover:bg-[#DCFCE7] hover:text-[#166534] focus-visible:ring-2 focus-visible:ring-[#15803D] dark:border-green-700 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900";
+
+type OutlineSnapshot = Pick<ReportConversationThread, "generalOutline" | "purposeOutline">;
+type OutlineComparison = { previous: OutlineSnapshot; currentFingerprint: string; responseIndex: number };
+
+function outlineSnapshot(thread: ReportConversationThread | null | undefined): OutlineSnapshot {
+  return { generalOutline: thread?.generalOutline ?? null, purposeOutline: thread?.purposeOutline ?? null };
+}
+
+function loadOutlineComparisons(): Record<string, OutlineComparison> {
+  if (typeof window === "undefined") return {};
+  try {
+    const saved = window.sessionStorage.getItem(OUTLINE_COMPARISON_STORAGE_KEY);
+    const parsed: unknown = saved ? JSON.parse(saved) : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, value]) => {
+        if (!value || typeof value !== "object") return false;
+        const entry = value as Partial<OutlineComparison>;
+        return Boolean(entry.previous && typeof entry.previous === "object") &&
+          typeof entry.currentFingerprint === "string" && typeof entry.responseIndex === "number";
+      }),
+    ) as Record<string, OutlineComparison>;
+  } catch {
+    return {};
+  }
+}
 
 export default function ReportGeneratorPage() {
   return (
@@ -44,10 +75,13 @@ function ReportGeneratorContent() {
   const [drafting, setDrafting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ percent: 0, label: "" });
+  const [progressDotCount, setProgressDotCount] = useState(1);
+  const [outlineViewMode, setOutlineViewMode] = useState<OutlineViewMode>("full");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [graphDialogOpen, setGraphDialogOpen] = useState(false);
   const [graphTrace, setGraphTrace] = useState<LatestReportGraphTrace | null>(null);
+  const [outlineComparisons, setOutlineComparisons] = useState<Record<string, OutlineComparison>>(loadOutlineComparisons);
   const pageRef = useRef<HTMLElement>(null);
   const centerPaneRef = useRef<HTMLDivElement>(null);
   const outlineAsideRef = useRef<HTMLElement>(null);
@@ -57,12 +91,20 @@ function ReportGeneratorContent() {
   const downloadTargetRef = useRef(0);
   const downloadDisplayedRef = useRef(0);
   const downloadProgressTimerRef = useRef<number | null>(null);
-  const finishProgressRef = useRef<(() => void) | null>(null);
   const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const messages = activeThread?.messages ?? [];
   const generalOutline = activeThread?.generalOutline ?? null;
   const purposeOutline = activeThread?.purposeOutline ?? null;
   const generalSourceMode = activeThread?.sourceMode ?? null;
+  const currentOutlineSnapshot = outlineSnapshot(activeThread);
+  const outlineComparison = outlineComparisons[activeThreadId];
+  const compareOutline = Boolean(
+    outlineComparison &&
+    outlineComparison.responseIndex === messages.length - 1 &&
+    outlineComparison.currentFingerprint === JSON.stringify(currentOutlineSnapshot),
+  );
+  const previousPurposeOutline = compareOutline ? outlineComparison.previous.purposeOutline : null;
+  const previousGeneralOutline = compareOutline ? outlineComparison.previous.generalOutline : null;
   const canDownload = messages.some((message) => message.role === "user");
   const latestResponse = messages.at(-1);
   const savedGraphTrace = graphTrace?.threadId === activeThreadId ? graphTrace : null;
@@ -76,12 +118,27 @@ function ReportGeneratorContent() {
     setGraphTrace(readReportGraphTrace());
   }, []);
 
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(OUTLINE_COMPARISON_STORAGE_KEY, JSON.stringify(outlineComparisons));
+    } catch {
+      // The latest comparison remains available until this page is closed.
+    }
+  }, [outlineComparisons]);
+
   useEffect(() => () => {
     if (downloadProgressTimerRef.current !== null) {
       window.clearInterval(downloadProgressTimerRef.current);
     }
-    finishProgressRef.current?.();
   }, []);
+
+  useEffect(() => {
+    if (!downloading) return;
+    const timer = window.setInterval(() => {
+      setProgressDotCount((count) => count === 3 ? 1 : count + 1);
+    }, 450);
+    return () => window.clearInterval(timer);
+  }, [downloading]);
 
   useEffect(() => {
     const pane = centerPaneRef.current;
@@ -197,9 +254,24 @@ function ReportGeneratorContent() {
     setPendingMessage(content);
     setError("");
     setStatus("");
+    const previousSnapshot = outlineSnapshot(activeThread);
     try {
       const saved = await sendReportThreadMessage(activeThreadId, content);
       const { graphNodes, ...thread } = saved;
+      const currentSnapshot = outlineSnapshot(thread);
+      setOutlineComparisons((current) => {
+        const next = { ...current };
+        if (JSON.stringify(previousSnapshot) === JSON.stringify(currentSnapshot)) {
+          delete next[thread.id];
+        } else {
+          next[thread.id] = {
+            previous: previousSnapshot,
+            currentFingerprint: JSON.stringify(currentSnapshot),
+            responseIndex: thread.messages.length - 1,
+          };
+        }
+        return next;
+      });
       setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]);
       const latestMessage = thread.messages.at(-1);
       if (latestMessage?.role === "assistant") {
@@ -227,6 +299,7 @@ function ReportGeneratorContent() {
 
   async function downloadReport() {
     if (!activeThread || !canDownload || drafting || downloading) return;
+    setProgressDotCount(1);
     setDownloading(true);
     downloadTargetRef.current = 0;
     downloadDisplayedRef.current = 0;
@@ -243,10 +316,6 @@ function ReportGeneratorContent() {
       );
       downloadDisplayedRef.current = next;
       setDownloadProgress((current) => ({ ...current, percent: next }));
-      if (next === 100) {
-        finishProgressRef.current?.();
-        finishProgressRef.current = null;
-      }
     }, 80);
     setError("");
     setStatus("");
@@ -256,12 +325,11 @@ function ReportGeneratorContent() {
         (percent, label) => {
           downloadTargetRef.current = Math.max(
             downloadTargetRef.current,
-            Math.max(0, Math.min(100, Math.round(percent))),
+            Math.max(0, Math.min(99, Math.round(percent))),
           );
-          setDownloadProgress((current) => ({ ...current, label }));
+          setDownloadProgress((current) => ({ ...current, label: percent >= 100 ? "準備下載 DOCX" : label }));
         },
       );
-      downloadTargetRef.current = 100;
       const url = URL.createObjectURL(result.blob);
       const link = document.createElement("a");
       link.href = url;
@@ -270,9 +338,13 @@ function ReportGeneratorContent() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      if (downloadDisplayedRef.current < 100) {
-        await new Promise<void>((resolve) => { finishProgressRef.current = resolve; });
+      if (downloadProgressTimerRef.current !== null) {
+        window.clearInterval(downloadProgressTimerRef.current);
+        downloadProgressTimerRef.current = null;
       }
+      downloadTargetRef.current = 100;
+      downloadDisplayedRef.current = 100;
+      setDownloadProgress({ percent: 100, label: "下載完成" });
       setStatus("已下載 " + result.filename);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "DOCX 產生失敗");
@@ -281,7 +353,6 @@ function ReportGeneratorContent() {
         window.clearInterval(downloadProgressTimerRef.current);
         downloadProgressTimerRef.current = null;
       }
-      finishProgressRef.current = null;
       setDownloading(false);
     }
   }
@@ -310,6 +381,11 @@ function ReportGeneratorContent() {
       await deleteReportThread(threadId);
       const remaining = threads.filter((thread) => thread.id !== threadId);
       setThreads(remaining);
+      setOutlineComparisons((current) => {
+        const next = { ...current };
+        delete next[threadId];
+        return next;
+      });
       deleteReportGraphTrace(threadId);
       setGraphTrace((current) => current?.threadId === threadId ? null : current);
       if (threadId === activeThreadId) {
@@ -464,55 +540,30 @@ function ReportGeneratorContent() {
             <section className="rounded-lg border border-border bg-background p-4">
               <div className="flex items-center gap-2"><Sparkles className="h-5 w-5" /><h2 className="font-semibold">大綱預覽</h2>{pendingMessage ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" /> : null}</div>
               <p className="mt-1 text-xs text-muted-foreground">先確認文件用途，再整理成一份可修改的大綱。</p>
-              {activeThread?.pendingClarification ? <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-medium">需要確認：{activeThread.pendingClarification.missingDecision}</p><p className="mt-1">{activeThread.pendingClarification.question}</p></div> : null}
+              <div role="group" aria-label="大綱預覽顯示方式" className="mt-3 flex flex-wrap gap-1.5">
+                {([
+                  ["latest", "一般檢視"],
+                  ["changes", "檢視最新改動"],
+                  ["full", "檢視完整修訂"],
+                ] as const).map(([mode, label]) => <Button
+                  key={mode}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-pressed={outlineViewMode === mode}
+                  onClick={() => setOutlineViewMode(mode)}
+                  className={`h-auto min-h-8 whitespace-normal text-xs ${outlineViewMode === mode ? ACTIVE_OUTLINE_MODE_CLASS : INACTIVE_OUTLINE_MODE_CLASS}`}
+                >{label}</Button>)}
+              </div>
+              {compareOutline && outlineViewMode !== "latest" ? <div className="mt-2 flex flex-wrap gap-1.5 text-xs" aria-label="大綱變更顏色說明">
+                <span className="rounded px-1.5 py-0.5" style={OUTLINE_CHANGE_COLORS.added}>新增</span>
+                {outlineViewMode === "full" ? <span className="rounded px-1.5 py-0.5" style={OUTLINE_CHANGE_COLORS.deleted}>刪除</span> : null}
+                <span className="rounded px-1.5 py-0.5" style={OUTLINE_CHANGE_COLORS.unchanged}>未變更</span>
+              </div> : null}
+              {outlineViewMode === "changes" ? <p className="mt-2 text-xs text-muted-foreground">顯示最新版大綱；新增文字標綠，其餘文字維持灰色。</p> : null}
+              {activeThread?.pendingClarification ? <div className="mt-4 rounded-lg border p-3 text-sm" style={{ ...OUTLINE_CHANGE_COLORS.modified, borderColor: OUTLINE_CHANGE_COLORS.modified.color }}><p className="font-medium">需要確認：{activeThread.pendingClarification.missingDecision}</p><p className="mt-1">{activeThread.pendingClarification.question}</p></div> : null}
               {(purposeOutline || generalOutline) && generalSourceMode === "default_json" ? <p className="mt-2 text-xs text-muted-foreground">下載時會先比對測試資料與大綱；相符才引用 JSON，否則由 AI 依大綱撰寫。</p> : null}
-              {purposeOutline ? (
-                <div className="mt-5 space-y-5 text-sm">
-                  <div className="rounded-lg bg-secondary p-4">
-                    <span className="text-xs font-semibold text-muted-foreground">統一文件大綱</span>
-                    <h3 className="mt-1 text-base font-semibold">{purposeOutline.title}</h3>
-                    <dl className="mt-3 grid grid-cols-[60px_1fr] gap-y-1 text-foreground">
-                      <dt className="text-muted-foreground">對象</dt><dd>{purposeOutline.subject}</dd>
-                      <dt className="text-muted-foreground">期間</dt><dd>{purposeOutline.period}</dd>
-                    </dl>
-                  </div>
-                  <div><h3 className="font-semibold">文件用途</h3><ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground">{purposeOutline.purposes.map((purpose) => <li key={purpose.purposeId}>{purpose.description}</li>)}</ul></div>
-                  <div><h3 className="font-semibold">文件目的</h3><p className="mt-1 whitespace-pre-wrap leading-6 text-muted-foreground">{purposeOutline.objective}</p></div>
-                  <div><h3 className="font-semibold">章節規劃（{purposeOutline.sections.length}）</h3>
-                    <div className="mt-2 space-y-3">{purposeOutline.sections.map((section, index) => (
-                      <div key={section.sectionKey} className="rounded-lg border border-border p-3">
-                        <h4 className="font-medium">{index + 1}. {section.heading}</h4>
-                        <p className="mt-1 whitespace-pre-wrap leading-6 text-muted-foreground">{section.focus}</p>
-                        {section.contents.length ? <p className="mt-2 text-xs text-muted-foreground">預計內容：{section.contents.map((content) => content.name).join("、")}</p> : null}
-                      </div>
-                    ))}</div>
-                  </div>
-                  <div><h3 className="font-semibold">資料來源規劃</h3><p className="mt-1 whitespace-pre-wrap leading-6 text-muted-foreground">{purposeOutline.sourcePlan}</p></div>
-                </div>
-              ) : generalOutline ? (
-                <div className="mt-5 space-y-5 text-sm">
-                  <div className="rounded-lg bg-secondary p-4">
-                    <span className="text-xs font-semibold text-muted-foreground">{generalOutline.documentTypeId} {generalOutline.documentTypeName}</span>
-                    <h3 className="mt-1 text-base font-semibold">{generalOutline.title}</h3>
-                    <dl className="mt-3 grid grid-cols-[60px_1fr] gap-y-1 text-foreground">
-                      <dt className="text-muted-foreground">對象</dt><dd>{generalOutline.subject}</dd>
-                      <dt className="text-muted-foreground">期間</dt><dd>{generalOutline.period}</dd>
-                    </dl>
-                  </div>
-                  <div><h3 className="font-semibold">文件目的</h3><p className="mt-1 whitespace-pre-wrap leading-6 text-muted-foreground">{generalOutline.objective}</p></div>
-                  <div>
-                    <h3 className="font-semibold">章節規劃（{generalOutline.sections.length}）</h3>
-                    <div className="mt-2 space-y-3">{generalOutline.sections.map((section, index) => (
-                      <div key={section.sectionId} className="rounded-lg border border-border p-3">
-                        <h4 className="font-medium">{index + 1}. {section.heading} <span className="text-xs font-normal text-muted-foreground">{section.sectionId} · {section.isRequired ? "必要" : "可選"}</span></h4>
-                        <p className="mt-1 whitespace-pre-wrap leading-6 text-muted-foreground">{section.focus}</p>
-                        <p className="mt-2 text-xs text-muted-foreground">預計內容：{section.contents.map((content) => content.name).join("、")}</p>
-                      </div>
-                    ))}</div>
-                  </div>
-                  <div><h3 className="font-semibold">資料來源規劃</h3><p className="mt-1 whitespace-pre-wrap leading-6 text-muted-foreground">{generalOutline.sourcePlan}</p></div>
-                </div>
-              ) : <div className="mt-5 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">先在聊天視窗描述報告需求，這裡會顯示可修改的大綱。</div>}
+              <OutlinePreview purposeOutline={purposeOutline} generalOutline={generalOutline} previousPurposeOutline={previousPurposeOutline} previousGeneralOutline={previousGeneralOutline} compare={compareOutline} mode={outlineViewMode} />
             </section>
 
             <section className="rounded-lg border border-border bg-background p-4">
@@ -525,10 +576,13 @@ function ReportGeneratorContent() {
             </section>
         </div>
         <footer className="shrink-0 space-y-3 border-t border-border bg-background p-4">
-          {downloading ? (
+          {downloading || (downloadProgress.percent === 100 && Boolean(status)) ? (
             <div className="space-y-2 rounded-lg border border-border bg-secondary p-3" role="status" aria-live="polite">
               <div className="flex items-center justify-between gap-3 text-xs">
-                <span className="min-w-0 truncate text-muted-foreground">{downloadProgress.label}</span>
+                <span className="min-w-0 truncate text-muted-foreground">
+                  {downloadProgress.label}
+                  {downloading ? <span aria-hidden="true" className="inline-block w-[1.5em] text-left">{".".repeat(progressDotCount)}</span> : null}
+                </span>
                 <span className="shrink-0 font-semibold tabular-nums">{downloadProgress.percent}%</span>
               </div>
               <div
@@ -540,7 +594,7 @@ function ReportGeneratorContent() {
                 aria-valuetext={downloadProgress.label}
                 className="h-2 overflow-hidden rounded-full bg-border"
               >
-                <div className="h-full rounded-full bg-primary transition-[width] duration-75" style={{ width: `${downloadProgress.percent}%` }} />
+                <div className={`h-full rounded-full bg-primary ${downloadProgress.percent === 100 ? "" : "transition-[width] duration-75"}`} style={{ width: `${downloadProgress.percent}%` }} />
               </div>
             </div>
           ) : null}
